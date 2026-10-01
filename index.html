@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sprachverständnis-App</title>
+
+  <style>
+    :root {
+      --primary: #2563eb;
+      --success: #22c55e;
+      --error: #ef4444;
+      --background: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--background);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    header {
+      padding: 1rem;
+      text-align: center;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: clamp(1.4rem, 4vw, 2rem);
+    }
+
+    main {
+      padding: 1rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .instruction {
+      text-align: center;
+      font-size: clamp(1.2rem, 3vw, 1.8rem);
+      margin: 1.5rem 0;
+      font-weight: 700;
+    }
+
+    .image-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      min-height: 55vh;
+    }
+
+    .image-card {
+      position: relative;
+      background: var(--card);
+      border-radius: 24px;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+      cursor: pointer;
+      overflow: hidden;
+      border: 6px solid transparent;
+      transition: transform 0.15s ease, border-color 0.15s ease;
+    }
+
+    .image-card:active {
+      transform: scale(0.98);
+    }
+
+    .image-card.correct {
+      border-color: var(--success);
+    }
+
+    .image-card.wrong {
+      border-color: var(--error);
+    }
+
+    .image-card img {
+      max-width: 100%;
+      max-height: 55vh;
+      object-fit: contain;
+      border-radius: 16px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .bottom-bar {
+      position: fixed;
+      right: 1rem;
+      bottom: 1rem;
+      display: flex;
+      gap: 0.75rem;
+      z-index: 50;
+    }
+
+    button {
+      border: none;
+      border-radius: 999px;
+      padding: 1rem 1.4rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      cursor: pointer;
+      background: var(--primary);
+      color: white;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+    }
+
+    button.secondary {
+      background: #475569;
+    }
+
+    button.success {
+      background: var(--success);
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Start-/Einstellungsfenster */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(15, 23, 42, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 1rem;
+    }
+
+    .modal {
+      background: white;
+      border-radius: 28px;
+      padding: 1.5rem;
+      max-width: 640px;
+      width: 100%;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal h2 {
+      margin-top: 0;
+      font-size: 1.8rem;
+    }
+
+    .modal p {
+      font-size: 1.05rem;
+      line-height: 1.5;
+    }
+
+    input[type="file"] {
+      display: block;
+      width: 100%;
+      padding: 1rem;
+      margin: 1rem 0;
+      border: 2px dashed #94a3b8;
+      border-radius: 16px;
+      background: #f8fafc;
+      font-size: 1rem;
+    }
+
+    .file-info {
+      margin: 0.5rem 0 1rem;
+      font-weight: 700;
+    }
+
+    .hint {
+      color: #475569;
+      font-size: 0.95rem;
+    }
+
+    /* Konfetti */
+    .confetti {
+      position: absolute;
+      top: -20px;
+      width: 10px;
+      height: 16px;
+      opacity: 0.9;
+      animation-name: fall;
+      animation-timing-function: linear;
+      animation-fill-mode: forwards;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    @keyframes fall {
+      0% {
+        transform: translateY(-20px) rotate(0deg);
+      }
+      100% {
+        transform: translateY(120vh) rotate(720deg);
+      }
+    }
+
+    @media (max-width: 700px) {
+      .image-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .image-card img {
+        max-height: 35vh;
+      }
+
+      .bottom-bar {
+        left: 1rem;
+        right: 1rem;
+        justify-content: flex-end;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <h1>Sprachverständnis-App</h1>
+  </header>
+
+  <main>
+    <div class="instruction" id="instruction">
+      Höre gut zu und tippe auf das passende Bild.
+    </div>
+
+    <section class="image-grid" id="imageGrid">
+      <div class="image-card" id="cardA">
+        <img id="imgA" alt="Bild A" />
+      </div>
+
+      <div class="image-card" id="cardB">
+        <img id="imgB" alt="Bild B" />
+      </div>
+    </section>
+  </main>
+
+  <div class="bottom-bar">
+    <button class="secondary hidden" id="repeatButton">Noch einmal hören</button>
+    <button class="success hidden" id="nextButton">Weiter</button>
+  </div>
+
+  <!-- Einstellungsfenster -->
+  <div class="modal-backdrop" id="setupModal">
+    <div class="modal">
+      <h2>Bilder auswählen</h2>
+
+      <p>
+        Wähle bis zu <strong>20 PNGs oder Fotos</strong> aus.
+        Der <strong>Dateiname</strong> wird später vorgelesen.
+      </p>
+
+      <p class="hint">
+        Beispiel: Eine Datei mit dem Namen <strong>Hund.png</strong>
+        wird als <strong>„Hund“</strong> vorgelesen.
+      </p>
+
+      <input
+        type="file"
+        id="fileInput"
+        accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/*"
+        multiple
+      />
+
+      <div class="file-info" id="fileInfo">
+        Noch keine Bilder ausgewählt.
+      </div>
+
+      <button id="startButton" disabled>Starten</button>
+    </div>
+  </div>
+
+  <script>
+    const MAX_FILES = 20;
+
+    let images = [];
+    let currentPair = [];
+    let correctImage = null;
+    let answered = false;
+
+    const setupModal = document.getElementById("setupModal");
+    const fileInput = document.getElementById("fileInput");
+    const fileInfo = document.getElementById("fileInfo");
+    const startButton = document.getElementById("startButton");
+
+    const instruction = document.getElementById("instruction");
+
+    const cardA = document.getElementById("cardA");
+    const cardB = document.getElementById("cardB");
+    const imgA = document.getElementById("imgA");
+    const imgB = document.getElementById("imgB");
+
+    const repeatButton = document.getElementById("repeatButton");
+    const nextButton = document.getElementById("nextButton");
+
+    fileInput.addEventListener("change", handleFileSelection);
+    startButton.addEventListener("click", startApp);
+    repeatButton.addEventListener("click", () => speakCurrentWord());
+    nextButton.addEventListener("click", nextRound);
+
+    cardA.addEventListener("click", () => checkAnswer(currentPair[0], cardA));
+    cardB.addEventListener("click", () => checkAnswer(currentPair[1], cardB));
+
+    function handleFileSelection(event) {
+      const selectedFiles = Array.from(event.target.files)
+        .filter(file => file.type.startsWith("image/"))
+        .slice(0, MAX_FILES);
+
+      images.forEach(image => URL.revokeObjectURL(image.url));
+
+      images = selectedFiles.map(file => ({
+        name: cleanFileName(file.name),
+        url: URL.createObjectURL(file)
+      }));
+
+      if (images.length < 2) {
+        fileInfo.textContent = "Bitte mindestens 2 Bilder auswählen.";
+        startButton.disabled = true;
+        return;
+      }
+
+      fileInfo.textContent = `${images.length} Bild(er) ausgewählt.`;
+      startButton.disabled = false;
+    }
+
+    function cleanFileName(fileName) {
+      return fileName
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[_-]+/g, " ")
+        .trim();
+    }
+
+    function startApp() {
+      setupModal.classList.add("hidden");
+
+      // Wichtig für iPad/Safari:
+      // Die Sprachausgabe wird durch den Start-Klick aktiviert.
+      speak("Los geht's.");
+
+      repeatButton.classList.remove("hidden");
+
+      setTimeout(() => {
+        nextRound();
+      }, 800);
+    }
+
+    function nextRound() {
+      answered = false;
+
+      cardA.classList.remove("correct", "wrong");
+      cardB.classList.remove("correct", "wrong");
+
+      nextButton.classList.add("hidden");
+
+      currentPair = getTwoRandomImages();
+      correctImage = currentPair[Math.floor(Math.random() * 2)];
+
+      imgA.src = currentPair[0].url;
+      imgA.alt = currentPair[0].name;
+
+      imgB.src = currentPair[1].url;
+      imgB.alt = currentPair[1].name;
+
+      instruction.textContent = "Höre gut zu und tippe auf das passende Bild.";
+
+      setTimeout(() => {
+        speakCurrentWord();
+      }, 500);
+    }
+
+    function getTwoRandomImages() {
+      const shuffled = [...images].sort(() => Math.random() - 0.5);
+      return [shuffled[0], shuffled[1]];
+    }
+
+    function speakCurrentWord() {
+      if (!correctImage) return;
+      speak(correctImage.name);
+    }
+
+    function checkAnswer(selectedImage, selectedCard) {
+      if (answered) return;
+
+      if (selectedImage === correctImage) {
+        answered = true;
+
+        selectedCard.classList.add("correct");
+        instruction.textContent = "Genau richtig!";
+
+        speak("Genau richtig");
+        createConfetti(selectedCard);
+
+        setTimeout(() => {
+          nextButton.classList.remove("hidden");
+        }, 1200);
+
+      } else {
+        selectedCard.classList.add("wrong");
+        instruction.textContent = "Leider falsch. Versuche es noch einmal.";
+
+        speak("Leider falsch");
+
+        setTimeout(() => {
+          selectedCard.classList.remove("wrong");
+        }, 900);
+      }
+    }
+
+    function speak(text) {
+      if (!("speechSynthesis" in window)) {
+        console.warn("Sprachausgabe wird von diesem Browser nicht unterstützt.");
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "de-DE";
+      utterance.rate = 0.85;
+      utterance.pitch = 1.05;
+      utterance.volume = 1;
+
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function createConfetti(container) {
+      const colors = [
+        "#ef4444",
+        "#f97316",
+        "#eab308",
+        "#22c55e",
+        "#06b6d4",
+        "#3b82f6",
+        "#a855f7",
+        "#ec4899"
+      ];
+
+      const amount = 90;
+
+      for (let i = 0; i < amount; i++) {
+        const piece = document.createElement("div");
+        piece.classList.add("confetti");
+
+        piece.style.left = Math.random() * 100 + "%";
+        piece.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+        piece.style.animationDuration = 1.8 + Math.random() * 1.4 + "s";
+        piece.style.animationDelay = Math.random() * 0.3 + "s";
+        piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+
+        container.appendChild(piece);
+
+        setTimeout(() => {
+          piece.remove();
+        }, 3600);
+      }
+    }
+  </script>
+</body>
+</html>
