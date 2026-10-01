@@ -43,7 +43,7 @@
 
     main {
       padding: 1rem;
-      max-width: 1100px;
+      max-width: 1200px;
       margin: 0 auto;
     }
 
@@ -57,7 +57,7 @@
 
     .image-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(var(--columns, 2), 1fr);
       gap: 1rem;
       min-height: 55vh;
     }
@@ -75,6 +75,7 @@
       overflow: hidden;
       border: 6px solid transparent;
       transition: transform 0.15s ease, border-color 0.15s ease;
+      min-height: 280px;
     }
 
     .image-card:active {
@@ -177,7 +178,7 @@
       background: white;
       border-radius: 28px;
       padding: 1.5rem;
-      max-width: 640px;
+      max-width: 680px;
       width: 100%;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
     }
@@ -201,6 +202,17 @@
       border-radius: 16px;
       background: #f8fafc;
       font-size: 1rem;
+    }
+
+    select {
+      display: block;
+      width: 100%;
+      padding: 1rem;
+      margin: 0.75rem 0 1rem;
+      border: 2px solid #94a3b8;
+      border-radius: 16px;
+      background: #f8fafc;
+      font-size: 1.05rem;
     }
 
     .file-info {
@@ -291,9 +303,19 @@
       }
     }
 
+    @media (max-width: 900px) {
+      .image-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
     @media (max-width: 700px) {
       .image-grid {
         grid-template-columns: 1fr;
+      }
+
+      .image-card {
+        min-height: 220px;
       }
 
       .image-card img {
@@ -323,15 +345,7 @@
       Höre gut zu und tippe auf das passende Bild.
     </div>
 
-    <section class="image-grid" id="imageGrid">
-      <div class="image-card" id="cardA">
-        <img id="imgA" alt="Bild A" />
-      </div>
-
-      <div class="image-card" id="cardB">
-        <img id="imgB" alt="Bild B" />
-      </div>
-    </section>
+    <section class="image-grid" id="imageGrid"></section>
   </main>
 
   <!-- Zahnrad links unten -->
@@ -356,13 +370,28 @@
 
       <p>
         Wähle bis zu <strong>20 PNGs oder Fotos</strong> aus.
-        Der <strong>Dateiname</strong> wird später vorgelesen.
+        Der <strong>Dateiname soll den Artikel enthalten</strong>.
       </p>
 
       <p class="hint">
-        Beispiel: Eine Datei mit dem Namen <strong>Hund.png</strong>
-        wird als <strong>„Hund“</strong> vorgelesen.
+        Beispiele:
+        <strong>der Hund.png</strong>,
+        <strong>die Katze.jpg</strong>,
+        <strong>das Auto.png</strong>
+        <br />
+        Die App spricht dann zum Beispiel:
+        <strong>„Wo ist – der Hund?“</strong>
       </p>
+
+      <label for="imageCountSelect">
+        <strong>Anzahl der angezeigten Bilder:</strong>
+      </label>
+
+      <select id="imageCountSelect">
+        <option value="2" selected>2 Bilder</option>
+        <option value="3">3 Bilder</option>
+        <option value="4">4 Bilder</option>
+      </select>
 
       <input
         type="file"
@@ -383,9 +412,13 @@
     const MAX_FILES = 20;
 
     let images = [];
-    let currentPair = [];
+    let currentChoices = [];
     let correctImage = null;
     let answered = false;
+    let numberOfChoices = 2;
+    let selectedFileCountBeforeLimit = 0;
+
+    let availableVoices = [];
 
     const wrongMessages = [
       "Leider falsch.",
@@ -445,32 +478,35 @@
 
     const setupModal = document.getElementById("setupModal");
     const fileInput = document.getElementById("fileInput");
+    const imageCountSelect = document.getElementById("imageCountSelect");
     const fileInfo = document.getElementById("fileInfo");
     const startButton = document.getElementById("startButton");
 
     const instruction = document.getElementById("instruction");
-
-    const cardA = document.getElementById("cardA");
-    const cardB = document.getElementById("cardB");
-    const imgA = document.getElementById("imgA");
-    const imgB = document.getElementById("imgB");
+    const imageGrid = document.getElementById("imageGrid");
 
     const repeatButton = document.getElementById("repeatButton");
     const nextButton = document.getElementById("nextButton");
     const settingsButton = document.getElementById("settingsButton");
 
     fileInput.addEventListener("change", handleFileSelection);
+    imageCountSelect.addEventListener("change", updateStartButton);
     startButton.addEventListener("click", startApp);
     repeatButton.addEventListener("click", () => speakCurrentWord());
     nextButton.addEventListener("click", nextRound);
     settingsButton.addEventListener("click", openSettings);
 
-    cardA.addEventListener("click", () => checkAnswer(currentPair[0], cardA));
-    cardB.addEventListener("click", () => checkAnswer(currentPair[1], cardB));
+    if ("speechSynthesis" in window) {
+      loadVoices();
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
 
     function handleFileSelection(event) {
-      const selectedFiles = Array.from(event.target.files)
-        .filter(file => file.type.startsWith("image/"))
+      const allSelectedFiles = Array.from(event.target.files);
+      selectedFileCountBeforeLimit = allSelectedFiles.length;
+
+      const selectedFiles = allSelectedFiles
+        .filter(file => isImageFile(file))
         .slice(0, MAX_FILES);
 
       images.forEach(image => URL.revokeObjectURL(image.url));
@@ -480,16 +516,39 @@
         url: URL.createObjectURL(file)
       }));
 
-      if (images.length < 2) {
-        fileInfo.textContent = "Bitte mindestens 2 Bilder auswählen.";
+      updateStartButton();
+    }
+
+    function isImageFile(file) {
+      const fileName = file.name.toLowerCase();
+
+      return (
+        file.type.startsWith("image/") ||
+        fileName.endsWith(".png") ||
+        fileName.endsWith(".jpg") ||
+        fileName.endsWith(".jpeg") ||
+        fileName.endsWith(".heic") ||
+        fileName.endsWith(".heif") ||
+        fileName.endsWith(".webp")
+      );
+    }
+
+    function updateStartButton() {
+      numberOfChoices = Number(imageCountSelect.value);
+
+      if (images.length < numberOfChoices) {
+        fileInfo.textContent =
+          `Bitte mindestens ${numberOfChoices} Bilder auswählen.`;
         startButton.disabled = true;
         return;
       }
 
-      if (event.target.files.length > MAX_FILES) {
-        fileInfo.textContent = `${images.length} Bilder ausgewählt. Es werden nur die ersten 20 Bilder verwendet.`;
+      if (selectedFileCountBeforeLimit > MAX_FILES) {
+        fileInfo.textContent =
+          `${images.length} Bilder ausgewählt. Es werden nur die ersten 20 Bilder verwendet.`;
       } else {
-        fileInfo.textContent = `${images.length} Bild(er) ausgewählt.`;
+        fileInfo.textContent =
+          `${images.length} Bild(er) ausgewählt.`;
       }
 
       startButton.disabled = false;
@@ -499,10 +558,18 @@
       return fileName
         .replace(/\.[^/.]+$/, "")
         .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
         .trim();
     }
 
     function startApp() {
+      numberOfChoices = Number(imageCountSelect.value);
+
+      if (images.length < numberOfChoices) {
+        updateStartButton();
+        return;
+      }
+
       setupModal.classList.add("hidden");
 
       settingsButton.classList.add("hidden");
@@ -523,13 +590,9 @@
 
       answered = false;
       correctImage = null;
-      currentPair = [];
+      currentChoices = [];
 
-      cardA.classList.remove("correct", "wrong");
-      cardB.classList.remove("correct", "wrong");
-
-      imgA.removeAttribute("src");
-      imgB.removeAttribute("src");
+      imageGrid.innerHTML = "";
 
       instruction.textContent = "Höre gut zu und tippe auf das passende Bild.";
 
@@ -537,26 +600,24 @@
       nextButton.classList.add("hidden");
       settingsButton.classList.add("hidden");
 
+      updateStartButton();
+
       setupModal.classList.remove("hidden");
     }
 
     function nextRound() {
       answered = false;
 
-      cardA.classList.remove("correct", "wrong");
-      cardB.classList.remove("correct", "wrong");
-
       nextButton.classList.add("hidden");
       settingsButton.classList.add("hidden");
 
-      currentPair = getTwoRandomImages();
-      correctImage = currentPair[Math.floor(Math.random() * 2)];
+      imageGrid.innerHTML = "";
+      imageGrid.style.setProperty("--columns", numberOfChoices);
 
-      imgA.src = currentPair[0].url;
-      imgA.alt = currentPair[0].name;
+      currentChoices = getRandomImages(numberOfChoices);
+      correctImage = getRandomItem(currentChoices);
 
-      imgB.src = currentPair[1].url;
-      imgB.alt = currentPair[1].name;
+      renderImageCards();
 
       instruction.textContent = "Höre gut zu und tippe auf das passende Bild.";
 
@@ -565,14 +626,36 @@
       }, 500);
     }
 
-    function getTwoRandomImages() {
+    function renderImageCards() {
+      currentChoices.forEach(image => {
+        const card = document.createElement("div");
+        card.classList.add("image-card");
+
+        const img = document.createElement("img");
+        img.src = image.url;
+        img.alt = image.name;
+
+        card.appendChild(img);
+
+        card.addEventListener("click", () => {
+          checkAnswer(image, card);
+        });
+
+        imageGrid.appendChild(card);
+      });
+    }
+
+    function getRandomImages(amount) {
       const shuffled = [...images].sort(() => Math.random() - 0.5);
-      return [shuffled[0], shuffled[1]];
+      return shuffled.slice(0, amount);
     }
 
     function speakCurrentWord() {
       if (!correctImage) return;
-      speak(correctImage.name);
+
+      // Der Dateiname enthält den Artikel:
+      // "der Hund.png" wird zu "Wo ist – der Hund?"
+      speak("Wo ist – " + correctImage.name + "?");
     }
 
     function checkAnswer(selectedImage, selectedCard) {
@@ -612,6 +695,41 @@
       return array[Math.floor(Math.random() * array.length)];
     }
 
+    function loadVoices() {
+      availableVoices = window.speechSynthesis.getVoices();
+    }
+
+    function getBestGermanVoice() {
+      const germanVoices = availableVoices.filter(voice =>
+        voice.lang && voice.lang.toLowerCase().startsWith("de")
+      );
+
+      if (germanVoices.length === 0) {
+        return null;
+      }
+
+      const preferredNames = [
+        "Anna",
+        "Petra",
+        "Markus",
+        "Yannick",
+        "Siri",
+        "Google Deutsch",
+        "German",
+        "Deutsch"
+      ];
+
+      for (const preferred of preferredNames) {
+        const found = germanVoices.find(voice =>
+          voice.name.toLowerCase().includes(preferred.toLowerCase())
+        );
+
+        if (found) return found;
+      }
+
+      return germanVoices[0];
+    }
+
     function speak(text) {
       if (!("speechSynthesis" in window)) {
         console.warn("Sprachausgabe wird von diesem Browser nicht unterstützt.");
@@ -621,9 +739,13 @@
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
+
       utterance.lang = "de-DE";
-      utterance.rate = 0.85;
-      utterance.pitch = 1.05;
+      utterance.voice = getBestGermanVoice();
+
+      // Etwas ruhiger und natürlicher
+      utterance.rate = 0.78;
+      utterance.pitch = 1.0;
       utterance.volume = 1;
 
       window.speechSynthesis.speak(utterance);
