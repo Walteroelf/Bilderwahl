@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sprachverständnis-App</title>
+  <title>Sprachverständnis-App – PL-Fix 2</title>
 
   <style>
     :root {
@@ -13,6 +13,7 @@
       --background: #f8fafc;
       --card: #ffffff;
       --text: #0f172a;
+      --muted: #475569;
     }
 
     * {
@@ -39,6 +40,13 @@
     header h1 {
       margin: 0;
       font-size: clamp(1.4rem, 4vw, 2rem);
+    }
+
+    .version {
+      margin-top: 0.35rem;
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 700;
     }
 
     main {
@@ -176,8 +184,10 @@
       background: white;
       border-radius: 28px;
       padding: 1.5rem;
-      max-width: 700px;
+      max-width: 760px;
       width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
     }
 
@@ -221,6 +231,22 @@
     .hint {
       color: #475569;
       font-size: 0.95rem;
+    }
+
+    .recognized-list {
+      margin: 0.75rem 0 1rem;
+      padding: 0.75rem;
+      border-radius: 16px;
+      background: #f1f5f9;
+      color: #334155;
+      font-size: 0.9rem;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    .recognized-list ul {
+      margin: 0.4rem 0 0;
+      padding-left: 1.2rem;
     }
 
     .celebration-piece {
@@ -347,6 +373,7 @@
 <body>
   <header>
     <h1>Sprachverständnis-App</h1>
+    <div class="version">Version: PL-Fix 2</div>
   </header>
 
   <main>
@@ -385,7 +412,7 @@
         <strong>die Katze.jpg</strong>,
         <strong>das Auto.png</strong>
         <br />
-        Die App spricht dann zum Beispiel:
+        Die App spricht dann:
         <strong>„Wo ist der Hund?“</strong>
       </p>
 
@@ -393,10 +420,11 @@
         <strong>Plural-Beispiele:</strong>
         <br />
         <strong>PL die Handschuhe.png</strong>,
-        <strong>PL die Schuhe.jpg</strong>,
-        <strong>PL die Äpfel.png</strong>
+        <strong>pl die Schuhe.jpg</strong>,
+        <strong>Plural die Äpfel.png</strong>,
+        <strong>die Socken [PL].png</strong>
         <br />
-        Die App spricht dann zum Beispiel:
+        Die App spricht dann:
         <strong>„Wo sind die Handschuhe?“</strong>
       </p>
 
@@ -420,6 +448,8 @@
       <div class="file-info" id="fileInfo">
         Noch keine Bilder ausgewählt.
       </div>
+
+      <div class="recognized-list hidden" id="recognizedList"></div>
 
       <button id="startButton" disabled>Starten</button>
     </div>
@@ -497,6 +527,7 @@
     const fileInput = document.getElementById("fileInput");
     const imageCountSelect = document.getElementById("imageCountSelect");
     const fileInfo = document.getElementById("fileInfo");
+    const recognizedList = document.getElementById("recognizedList");
     const startButton = document.getElementById("startButton");
 
     const instruction = document.getElementById("instruction");
@@ -532,6 +563,7 @@
         const parsedImage = parseImageName(file.name);
 
         return {
+          originalFileName: file.name,
           name: parsedImage.name,
           isPlural: parsedImage.isPlural,
           url: URL.createObjectURL(file)
@@ -539,6 +571,7 @@
       });
 
       updateStartButton();
+      updateRecognizedList();
     }
 
     function isImageFile(file) {
@@ -559,24 +592,53 @@
       numberOfChoices = Number(imageCountSelect.value);
 
       if (images.length < numberOfChoices) {
-        fileInfo.textContent = `Bitte mindestens ${numberOfChoices} Bilder auswählen.`;
+        fileInfo.textContent = "Bitte mindestens " + numberOfChoices + " Bilder auswählen.";
         startButton.disabled = true;
         return;
       }
 
       if (selectedFileCountBeforeLimit > MAX_FILES) {
         fileInfo.textContent =
-          `${images.length} Bilder ausgewählt. Es werden nur die ersten 20 Bilder verwendet.`;
+          images.length + " Bilder ausgewählt. Es werden nur die ersten 20 Bilder verwendet.";
       } else {
         fileInfo.textContent =
-          `${images.length} Bild(er) ausgewählt.`;
+          images.length + " Bild(er) ausgewählt.";
       }
 
       startButton.disabled = false;
     }
 
+    function updateRecognizedList() {
+      if (images.length === 0) {
+        recognizedList.classList.add("hidden");
+        recognizedList.innerHTML = "";
+        return;
+      }
+
+      let html = "<strong>Erkannte Namen:</strong><ul>";
+
+      images.forEach(image => {
+        const question = buildQuestionForImage(image);
+        html += "<li>" + escapeHtml(image.originalFileName) + " → <strong>" + escapeHtml(question) + "</strong></li>";
+      });
+
+      html += "</ul>";
+
+      recognizedList.innerHTML = html;
+      recognizedList.classList.remove("hidden");
+    }
+
+    function escapeHtml(text) {
+      return String(text)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
     function cleanFileName(fileName) {
-      return fileName
+      return String(fileName)
         .replace(/\.[^/.]+$/, "")
         .replace(/[_-]+/g, " ")
         .replace(/\s+/g, " ")
@@ -588,34 +650,99 @@
       let isPlural = false;
 
       /*
-        Plural wird erkannt bei:
+        Robuste Plural-Erkennung.
 
-        PL die Handschuhe.png
-        pl die Handschuhe.png
-        Plural die Handschuhe.png
-        plural die Handschuhe.png
-        die Handschuhe [PL].png
-        die Handschuhe [pl].png
+        Erkannt wird vorne:
+        - PL die Handschuhe.png
+        - pl die Handschuhe.png
+        - Plural die Handschuhe.png
+        - Mehrzahl die Handschuhe.png
+        - [PL] die Handschuhe.png
+        - (PL) die Handschuhe.png
 
-        Aus "PL die Handschuhe.png" wird:
-        name: "die Handschuhe"
-        isPlural: true
+        Erkannt wird hinten:
+        - die Handschuhe PL.png
+        - die Handschuhe [PL].png
+        - die Handschuhe (PL).png
+        - die Handschuhe plural.png
       */
 
-      if (/^(pl|plural)\b/i.test(name)) {
+      name = name.replace(/^\uFEFF/, "").trim();
+
+      const prefixPattern =
+        /^\s*(?:$$(?:pl|plural|mehrzahl)$$|$(?:pl|plural|mehrzahl)$|\{(?:pl|plural|mehrzahl)\}|(?:pl|plural|mehrzahl)(?=\s|[._-]|$))[\s._-]*/i;
+
+      const suffixPattern =
+        /[\s._-]*(?:$$(?:pl|plural|mehrzahl)$$|$(?:pl|plural|mehrzahl)$|\{(?:pl|plural|mehrzahl)\}|(?:pl|plural|mehrzahl))\s*$/i;
+
+      if (prefixPattern.test(name)) {
         isPlural = true;
-        name = name.replace(/^(pl|plural)\b[\s.]*/i, "").trim();
+        name = name.replace(prefixPattern, "").trim();
       }
 
-      if (/\s*$$(pl|plural)$$\s*$/i.test(name)) {
+      if (suffixPattern.test(name)) {
         isPlural = true;
-        name = name.replace(/\s*$$(pl|plural)$$\s*$/i, "").trim();
+        name = name.replace(suffixPattern, "").trim();
       }
+
+      name = removeAccidentalPluralMarkerInsideName(name);
 
       return {
         name: name,
         isPlural: isPlural
       };
+    }
+
+    function removeAccidentalPluralMarkerInsideName(name) {
+      /*
+        Sicherheitsnetz:
+        Falls aus irgendeinem Grund immer noch "PL die Handschuhe"
+        im Namen steckt, wird PL hier entfernt.
+      */
+
+      return String(name)
+        .replace(/^\s*(pl|plural|mehrzahl)\s+/i, "")
+        .replace(/\s+(pl|plural|mehrzahl)\s*$/i, "")
+        .replace(/^\s*[$$$\{]\s*(pl|plural|mehrzahl)\s*[$$$\}]\s*/i, "")
+        .replace(/\s*[$$$\{]\s*(pl|plural|mehrzahl)\s*[$$$\}]\s*$/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
+
+    function normalizeImageForSpeech(image) {
+      /*
+        Sehr wichtiger Zusatz:
+        Direkt vor dem Sprechen wird nochmals geprüft.
+        Dadurch kann "Wo ist PL die Handschuhe?" nicht mehr entstehen.
+      */
+
+      const parsedFromOriginal = parseImageName(image.originalFileName || image.name);
+      const parsedFromCurrentName = parseImageName(image.name);
+
+      const finalName = removeAccidentalPluralMarkerInsideName(
+        parsedFromOriginal.name || parsedFromCurrentName.name || image.name
+      );
+
+      const finalIsPlural =
+        Boolean(image.isPlural) ||
+        Boolean(parsedFromOriginal.isPlural) ||
+        Boolean(parsedFromCurrentName.isPlural) ||
+        /^\s*(pl|plural|mehrzahl)\s+/i.test(image.name);
+
+      return {
+        name: finalName,
+        isPlural: finalIsPlural
+      };
+    }
+
+    function buildQuestionForImage(image) {
+      const normalizedImage = normalizeImageForSpeech(image);
+
+      if (normalizedImage.isPlural) {
+        return "Wo sind " + normalizedImage.name + "?";
+      }
+
+      return "Wo ist " + normalizedImage.name + "?";
     }
 
     function startApp() {
@@ -655,6 +782,7 @@
       settingsButton.classList.add("hidden");
 
       updateStartButton();
+      updateRecognizedList();
 
       setupModal.classList.remove("hidden");
     }
@@ -687,7 +815,7 @@
 
         const img = document.createElement("img");
         img.src = image.url;
-        img.alt = image.name;
+        img.alt = normalizeImageForSpeech(image).name;
 
         card.appendChild(img);
 
@@ -707,11 +835,8 @@
     function speakCurrentWord() {
       if (!correctImage) return;
 
-      if (correctImage.isPlural) {
-        speak("Wo sind " + correctImage.name + "?");
-      } else {
-        speak("Wo ist " + correctImage.name + "?");
-      }
+      const question = buildQuestionForImage(correctImage);
+      speak(question);
     }
 
     function checkAnswer(selectedImage, selectedCard) {
