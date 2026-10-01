@@ -120,7 +120,6 @@
       display: none !important;
     }
 
-    /* Button-Positionen */
     .repeat-bar {
       position: fixed;
       left: 50%;
@@ -162,7 +161,6 @@
       justify-content: center;
     }
 
-    /* Start-/Einstellungsfenster */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -178,7 +176,7 @@
       background: white;
       border-radius: 28px;
       padding: 1.5rem;
-      max-width: 680px;
+      max-width: 700px;
       width: 100%;
       box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
     }
@@ -225,7 +223,6 @@
       font-size: 0.95rem;
     }
 
-    /* Animationselemente */
     .celebration-piece {
       position: absolute;
       top: -30px;
@@ -348,22 +345,18 @@
     <section class="image-grid" id="imageGrid"></section>
   </main>
 
-  <!-- Zahnrad links unten -->
   <div class="settings-bar">
     <button class="hidden" id="settingsButton" aria-label="Einstellungen öffnen">⚙️</button>
   </div>
 
-  <!-- Noch einmal hören mittig unten -->
   <div class="repeat-bar">
     <button class="hidden" id="repeatButton">Noch einmal hören</button>
   </div>
 
-  <!-- Weiter rechts unten -->
   <div class="next-bar">
     <button class="hidden" id="nextButton">Weiter</button>
   </div>
 
-  <!-- Einstellungsfenster -->
   <div class="modal-backdrop" id="setupModal">
     <div class="modal">
       <h2>Bilder auswählen</h2>
@@ -374,13 +367,25 @@
       </p>
 
       <p class="hint">
-        Beispiele:
+        Beispiele für Singular:
+        <br />
         <strong>der Hund.png</strong>,
         <strong>die Katze.jpg</strong>,
         <strong>das Auto.png</strong>
         <br />
         Die App spricht dann zum Beispiel:
         <strong>„Wo ist – der Hund?“</strong>
+      </p>
+
+      <p class="hint">
+        Beispiele für Plural:
+        <br />
+        <strong>PL die Handschuhe.png</strong>,
+        <strong>PL die Schuhe.jpg</strong>,
+        <strong>PL die Äpfel.png</strong>
+        <br />
+        Die App spricht dann:
+        <strong>„Wo sind – die Handschuhe?“</strong>
       </p>
 
       <label for="imageCountSelect">
@@ -396,7 +401,7 @@
       <input
         type="file"
         id="fileInput"
-        accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/*"
+        accept="image/png,image/jpeg,image/jpg,image/heic,image/heif,image/webp,image/*"
         multiple
       />
 
@@ -511,10 +516,15 @@
 
       images.forEach(image => URL.revokeObjectURL(image.url));
 
-      images = selectedFiles.map(file => ({
-        name: cleanFileName(file.name),
-        url: URL.createObjectURL(file)
-      }));
+      images = selectedFiles.map(file => {
+        const parsedName = parseImageName(file.name);
+
+        return {
+          name: parsedName.name,
+          isPlural: parsedName.isPlural,
+          url: URL.createObjectURL(file)
+        };
+      });
 
       updateStartButton();
     }
@@ -562,6 +572,45 @@
         .trim();
     }
 
+    function parseImageName(fileName) {
+      let name = cleanFileName(fileName);
+      let isPlural = false;
+
+      /*
+        Plural-Markierungen werden erkannt.
+
+        Mögliche Dateinamen:
+        - PL die Handschuhe.png
+        - Plural die Schuhe.jpg
+        - die Äpfel [pl].png
+
+        Gesprochen wird dann:
+        - Wo sind – die Handschuhe?
+        - Wo sind – die Schuhe?
+        - Wo sind – die Äpfel?
+      */
+
+      if (/^pl\s+/i.test(name)) {
+        isPlural = true;
+        name = name.replace(/^pl\s+/i, "").trim();
+      }
+
+      if (/^plural\s+/i.test(name)) {
+        isPlural = true;
+        name = name.replace(/^plural\s+/i, "").trim();
+      }
+
+      if (/$$pl$$$/i.test(name)) {
+        isPlural = true;
+        name = name.replace(/$$pl$$$/i, "").trim();
+      }
+
+      return {
+        name: name,
+        isPlural: isPlural
+      };
+    }
+
     function startApp() {
       numberOfChoices = Number(imageCountSelect.value);
 
@@ -576,8 +625,6 @@
       nextButton.classList.add("hidden");
       repeatButton.classList.remove("hidden");
 
-      // Wichtig für iPad/Safari:
-      // Die Sprachausgabe wird durch den Start-Klick aktiviert.
       speak("Los geht's.");
 
       setTimeout(() => {
@@ -653,9 +700,11 @@
     function speakCurrentWord() {
       if (!correctImage) return;
 
-      // Der Dateiname enthält den Artikel:
-      // "der Hund.png" wird zu "Wo ist – der Hund?"
-      speak("Wo ist – " + correctImage.name + "?");
+      if (correctImage.isPlural) {
+        speak("Wo sind – " + correctImage.name + "?");
+      } else {
+        speak("Wo ist – " + correctImage.name + "?");
+      }
     }
 
     function checkAnswer(selectedImage, selectedCard) {
@@ -743,7 +792,6 @@
       utterance.lang = "de-DE";
       utterance.voice = getBestGermanVoice();
 
-      // Etwas ruhiger und natürlicher
       utterance.rate = 0.78;
       utterance.pitch = 1.0;
       utterance.volume = 1;
@@ -770,6 +818,7 @@
           : "";
 
         piece.style.left = Math.random() * 100 + "%";
+
         piece.style.backgroundColor = animationSettings.useBackground
           ? getRandomItem(animationSettings.colors)
           : "transparent";
