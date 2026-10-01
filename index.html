@@ -238,6 +238,7 @@
       0% {
         transform: translateY(-30px) rotate(0deg);
       }
+
       100% {
         transform: translateY(120vh) rotate(720deg);
       }
@@ -247,15 +248,19 @@
       0% {
         transform: translate(0, -30px) rotate(0deg);
       }
+
       25% {
         transform: translate(25px, 25vh) rotate(180deg);
       }
+
       50% {
         transform: translate(-20px, 55vh) rotate(360deg);
       }
+
       75% {
         transform: translate(20px, 85vh) rotate(540deg);
       }
+
       100% {
         transform: translate(0, 120vh) rotate(720deg);
       }
@@ -265,9 +270,11 @@
       0% {
         transform: translateY(-30px) scale(0.6) rotate(0deg);
       }
+
       50% {
         transform: translateY(55vh) scale(1.25) rotate(540deg);
       }
+
       100% {
         transform: translateY(120vh) scale(0.8) rotate(1080deg);
       }
@@ -277,12 +284,15 @@
       0% {
         transform: translateY(-30px) scale(0.8);
       }
+
       40% {
         transform: translateY(35vh) scale(1.25);
       }
+
       70% {
         transform: translateY(70vh) scale(0.9);
       }
+
       100% {
         transform: translateY(120vh) scale(1);
       }
@@ -292,9 +302,11 @@
       0% {
         transform: translateX(0) translateY(-30px) rotate(-25deg);
       }
+
       50% {
         transform: translateX(45px) translateY(55vh) rotate(25deg);
       }
+
       100% {
         transform: translateX(-20px) translateY(120vh) rotate(-25deg);
       }
@@ -367,25 +379,25 @@
       </p>
 
       <p class="hint">
-        Beispiele für Singular:
+        <strong>Singular-Beispiele:</strong>
         <br />
         <strong>der Hund.png</strong>,
         <strong>die Katze.jpg</strong>,
         <strong>das Auto.png</strong>
         <br />
         Die App spricht dann zum Beispiel:
-        <strong>„Wo ist – der Hund?“</strong>
+        <strong>„Wo ist der Hund?“</strong>
       </p>
 
       <p class="hint">
-        Beispiele für Plural:
+        <strong>Plural-Beispiele:</strong>
         <br />
         <strong>PL die Handschuhe.png</strong>,
         <strong>PL die Schuhe.jpg</strong>,
         <strong>PL die Äpfel.png</strong>
         <br />
-        Die App spricht dann:
-        <strong>„Wo sind – die Handschuhe?“</strong>
+        Die App spricht dann zum Beispiel:
+        <strong>„Wo sind die Handschuhe?“</strong>
       </p>
 
       <label for="imageCountSelect">
@@ -497,7 +509,7 @@
     fileInput.addEventListener("change", handleFileSelection);
     imageCountSelect.addEventListener("change", updateStartButton);
     startButton.addEventListener("click", startApp);
-    repeatButton.addEventListener("click", () => speakCurrentWord());
+    repeatButton.addEventListener("click", speakCurrentWord);
     nextButton.addEventListener("click", nextRound);
     settingsButton.addEventListener("click", openSettings);
 
@@ -517,11 +529,11 @@
       images.forEach(image => URL.revokeObjectURL(image.url));
 
       images = selectedFiles.map(file => {
-        const parsedName = parseImageName(file.name);
+        const parsedImage = parseImageName(file.name);
 
         return {
-          name: parsedName.name,
-          isPlural: parsedName.isPlural,
+          name: parsedImage.name,
+          isPlural: parsedImage.isPlural,
           url: URL.createObjectURL(file)
         };
       });
@@ -547,8 +559,7 @@
       numberOfChoices = Number(imageCountSelect.value);
 
       if (images.length < numberOfChoices) {
-        fileInfo.textContent =
-          `Bitte mindestens ${numberOfChoices} Bilder auswählen.`;
+        fileInfo.textContent = `Bitte mindestens ${numberOfChoices} Bilder auswählen.`;
         startButton.disabled = true;
         return;
       }
@@ -577,32 +588,28 @@
       let isPlural = false;
 
       /*
-        Plural-Markierungen werden erkannt.
+        Plural wird erkannt bei:
 
-        Mögliche Dateinamen:
-        - PL die Handschuhe.png
-        - Plural die Schuhe.jpg
-        - die Äpfel [pl].png
+        PL die Handschuhe.png
+        pl die Handschuhe.png
+        Plural die Handschuhe.png
+        plural die Handschuhe.png
+        die Handschuhe [PL].png
+        die Handschuhe [pl].png
 
-        Gesprochen wird dann:
-        - Wo sind – die Handschuhe?
-        - Wo sind – die Schuhe?
-        - Wo sind – die Äpfel?
+        Aus "PL die Handschuhe.png" wird:
+        name: "die Handschuhe"
+        isPlural: true
       */
 
-      if (/^pl\s+/i.test(name)) {
+      if (/^(pl|plural)\b/i.test(name)) {
         isPlural = true;
-        name = name.replace(/^pl\s+/i, "").trim();
+        name = name.replace(/^(pl|plural)\b[\s.]*/i, "").trim();
       }
 
-      if (/^plural\s+/i.test(name)) {
+      if (/\s*$$(pl|plural)$$\s*$/i.test(name)) {
         isPlural = true;
-        name = name.replace(/^plural\s+/i, "").trim();
-      }
-
-      if (/$$pl$$$/i.test(name)) {
-        isPlural = true;
-        name = name.replace(/$$pl$$$/i, "").trim();
+        name = name.replace(/\s*$$(pl|plural)$$\s*$/i, "").trim();
       }
 
       return {
@@ -701,9 +708,9 @@
       if (!correctImage) return;
 
       if (correctImage.isPlural) {
-        speak("Wo sind – " + correctImage.name + "?");
+        speak("Wo sind " + correctImage.name + "?");
       } else {
-        speak("Wo ist – " + correctImage.name + "?");
+        speak("Wo ist " + correctImage.name + "?");
       }
     }
 
@@ -791,7 +798,6 @@
 
       utterance.lang = "de-DE";
       utterance.voice = getBestGermanVoice();
-
       utterance.rate = 0.78;
       utterance.pitch = 1.0;
       utterance.volume = 1;
